@@ -142,12 +142,18 @@
   .xbtn:hover{background:var(--rust);color:#fff;border-color:var(--rust)}
   .xlabel{font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:#6b5f4b}
   .pc .use{
-    position:absolute;top:11px;right:12px;font-size:9px;letter-spacing:.13em;
+    position:absolute;top:11px;right:34px;font-size:9px;letter-spacing:.13em;
     text-transform:uppercase;color:#8a7a63;background:transparent;border:none;cursor:pointer;
     font-family:inherit;padding:2px 5px;border-radius:2px;
   }
   .pc .use:hover{color:#fff;background:var(--rust)}
   .pc.sel .use{color:#fff;background:var(--rust)}
+  .pc .del{
+    position:absolute;top:8px;right:9px;width:20px;height:20px;padding:0;line-height:18px;
+    background:transparent;border:1px solid transparent;color:#a2917a;cursor:pointer;
+    font-family:inherit;font-size:17px;border-radius:2px;text-align:center;
+  }
+  .pc .del:hover,.pc .del:focus-visible{background:var(--rust);color:#fff;border-color:var(--rust);outline:none}
 
   /* ---------- layout ---------- */
   .cols{display:grid;gap:16px;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
@@ -789,6 +795,7 @@ function drawRoster(){
     const b = brinks(p);
     return '<div class="pc' + (p.id === S.selected ? " sel" : "") + '" data-id="' + p.id + '">' +
       '<button class="use" data-act="use">' + (p.id === S.selected ? "acting" : "act") + "</button>" +
+      '<button class="del" data-act="del" title="Strike ' + esc(p.name) + ' off the roster">&times;</button>' +
       '<input class="nm" data-f="name" value="' + esc(p.name) + '" maxlength="28">' +
       '<div class="stats">' +
         ["soul","devil","brutality","ambition"].map(k =>
@@ -815,6 +822,7 @@ $("roster").addEventListener("input", e => {
 $("roster").addEventListener("click", e => {
   const card = e.target.closest(".pc"); if (!card) return;
   const p = pc(card.dataset.id), act = e.target.dataset.act; if (!p || !act) return;
+  if (act === "del"){ removePirate(p.id); return; }
   if (act === "use"){ S.selected = p.id; S.fight.ourId = p.id; }
   if (act === "x+") p.xs++;
   if (act === "x-") p.xs = Math.max(0, p.xs - 1);
@@ -1289,6 +1297,31 @@ $("clearLog").addEventListener("click", () => { S.log = []; drawLog(); save(); }
 $("addPc").addEventListener("click", () => {
   S.pirates.push(blank("A new pirate")); save(); drawRoster(); refreshPickers(); drawCrew();
 });
+
+/** Remove a pirate, and re-point anything that referred to them — the acting pirate,
+ *  either side of the fight, and their place in a crew fighting under a leader. */
+async function removePirate(id){
+  const p = pc(id); if (!p) return;
+  if (S.pirates.length <= 1)
+    return toast("That's the last pirate on the roster — strike them off and there's no one left to roll.");
+
+  const ok = await ask({ title: "Strike " + p.name + " off the roster",
+    body: "This removes " + p.name + ", their stats, and their " + p.xs + " X" + (p.xs === 1 ? "" : "s") +
+          ". It can't be undone." + (net.room ? "\n\nYou're on a shared table, so they go for everyone." : ""),
+    ok: "Strike them off" });
+  if (!ok) return;
+
+  S.pirates = S.pirates.filter(x => x.id !== id);
+  delete S.fight.crew[id];
+  const first = S.pirates[0].id;
+  if (S.selected === id) S.selected = first;
+  if (S.fight.ourId === id) S.fight.ourId = first;
+  if (S.fight.theirPc === id)
+    S.fight.theirPc = (S.pirates.find(x => x.id !== S.fight.ourId) || S.pirates[0]).id;
+
+  logIt(p.name + " is struck off the roster.", "");
+  boot();
+}
 $("shareRoster").addEventListener("click", () => {
   const code = btoa(unescape(encodeURIComponent(JSON.stringify(
     S.pirates.map(({name, soul, devil, brutality, ambition, profile}) =>
