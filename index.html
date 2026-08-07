@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poison'd — The Dice</title>
+<style>
+  :root{
+    --ink:#1a1410;
+    --sea:#12181c;
+    --sea2:#0c1114;
+    --parch:#e8dcc0;
+    --parch-d:#d6c6a2;
+    --parch-e:#f2e9d4;
+    --rust:#8c2f1c;
+    --rust-l:#c4522f;
+    --gold:#b8913f;
+    --gold-l:#d9b45f;
+    --muted:#6b5f4b;
+    --panel:rgba(232,220,192,.045);
+    --line:rgba(184,145,63,.28);
+  }
+  *{box-sizing:border-box}
+  /* This page commits to one visual world — a lantern-lit table below decks — so it
+     owns its ground rather than following the viewer's light/dark preference. */
+  :root{color-scheme:dark}
+  html,body{margin:0;padding:0}
+  html{background:var(--sea)}
+  body{
+    background:var(--sea);
+    background-image:
+      radial-gradient(ellipse at 20% 0%, #1c262b 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 100%, #1a1512 0%, transparent 55%);
+    background-attachment:fixed;
+    color:var(--parch);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:0 20px}
+
+  /* ---------- header ---------- */
+  header{text-align:center;padding:26px 0 6px}
+  h1{
+    margin:0;font-size:clamp(22px,3.4vw,34px);font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--parch-e);text-shadow:0 2px 14px rgba(0,0,0,.6);
+  }
+  h1 small{
+    display:block;font-size:.36em;letter-spacing:.42em;color:var(--gold-l);
+    margin-bottom:8px;font-weight:400;
+  }
+  .rule{height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);
+    margin:12px auto;max-width:520px}
+  .sub{font-size:13px;font-style:italic;color:#8d8267;margin:0}
+
+  /* ---------- generic panel ---------- */
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:4px;
+    padding:16px 18px;margin-bottom:16px;
+  }
+  .panel > h2{
+    margin:0 0 12px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--gold-l);font-weight:600;display:flex;align-items:center;gap:10px;
+  }
+  .panel > h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  h3.sec{
+    margin:18px 0 8px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:#7f7460;font-weight:600;
+  }
+
+  /* ---------- buttons & inputs ---------- */
+  .btn{
+    background:rgba(232,220,192,.06);border:1px solid var(--line);
+    color:#c9bda4;padding:8px 13px;border-radius:3px;cursor:pointer;
+    font-family:inherit;font-size:13px;letter-spacing:.05em;
+    transition:.14s;white-space:nowrap;
+  }
+  .btn:hover:not(:disabled){background:rgba(184,145,63,.18);color:var(--parch-e);border-color:var(--gold)}
+  .btn:disabled{opacity:.3;cursor:not-allowed}
+  .btn.primary{background:var(--rust);border-color:var(--rust-l);color:#fff;font-weight:600}
+  .btn.primary:hover:not(:disabled){background:var(--rust-l);color:#fff}
+  .btn.big{padding:11px 20px;font-size:14.5px;letter-spacing:.08em}
+  .btn.sm{padding:5px 9px;font-size:11.5px}
+  input,select{
+    background:rgba(232,220,192,.07);border:1px solid var(--line);color:var(--parch);
+    padding:6px 9px;border-radius:3px;font-family:inherit;font-size:13.5px;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--gold);background:rgba(232,220,192,.12)}
+  select option{background:#1a2126;color:var(--parch)}
+  input[type=number]{width:62px;text-align:center}
+  label.f{display:flex;flex-direction:column;gap:4px;font-size:10.5px;letter-spacing:.13em;
+    text-transform:uppercase;color:#7f7460}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row.center{align-items:center}
+
+  /* ---------- roster ---------- */
+  .roster{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin-bottom:16px}
+  .pc{
+    position:relative;
+    background:linear-gradient(168deg,var(--parch-e) 0%,var(--parch) 46%,var(--parch-d) 100%);
+    color:var(--ink);border-radius:3px;padding:13px 14px 12px;
+    box-shadow:0 3px 0 rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.45);
+    transition:transform .15s, box-shadow .15s;
+  }
+  .pc::before{content:"";position:absolute;inset:4px;border:1px solid rgba(26,20,16,.2);
+    border-radius:2px;pointer-events:none}
+  .pc.sel{box-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 0 2px var(--rust-l), 0 8px 26px rgba(0,0,0,.55);
+    transform:translateY(-2px)}
+  .pc .nm{
+    width:100%;background:transparent;border:none;border-bottom:1px solid rgba(26,20,16,.22);
+    color:#241a12;font-family:inherit;font-size:17px;font-weight:600;letter-spacing:.02em;
+    padding:0 0 4px;border-radius:0;
+  }
+  .pc .nm:focus{outline:none;border-bottom-color:var(--rust);background:transparent}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:10px 0 8px}
+  .st{text-align:center}
+  .st span{display:block;font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:#6b5f4b;margin-bottom:2px}
+  .st input{
+    width:100%;background:rgba(26,20,16,.06);border:1px solid rgba(26,20,16,.16);
+    color:#241a12;text-align:center;font-size:16px;font-weight:600;padding:3px 0;
+  }
+  .st input:focus{background:rgba(26,20,16,.12);border-color:var(--rust)}
+  .derived{display:flex;gap:10px;align-items:center;font-size:11px;color:#57493a;
+    border-top:1px solid rgba(26,20,16,.16);padding-top:8px}
+  .derived b{font-size:15px;color:#241a12;font-weight:600}
+  .derived .pf input{
+    width:42px;background:rgba(26,20,16,.06);border:1px solid rgba(26,20,16,.16);
+    color:#241a12;text-align:center;font-size:14px;font-weight:600;padding:1px 0;
+  }
+  .xbox{margin-left:auto;display:flex;align-items:center;gap:5px}
+  .xbox .xn{
+    min-width:38px;text-align:center;font-size:21px;font-weight:700;color:var(--rust);
+    line-height:1;font-variant-numeric:tabular-nums;
+  }
+  .xbox .xn.zero{color:#a6957c}
+  .xbtn{
+    width:22px;height:22px;line-height:1;padding:0;border:1px solid rgba(26,20,16,.25);
+    background:rgba(26,20,16,.05);color:#3a2c20;border-radius:2px;cursor:pointer;
+    font-family:inherit;font-size:15px;font-weight:600;
+  }
+  .xbtn:hover{background:var(--rust);color:#fff;border-color:var(--rust)}
+  .xlabel{font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:#6b5f4b}
+  .pc .use{
+    position:absolute;top:11px;right:12px;font-size:9px;letter-spacing:.13em;
+    text-transform:uppercase;color:#8a7a63;background:transparent;border:none;cursor:pointer;
+    font-family:inherit;padding:2px 5px;border-radius:2px;
+  }
+  .pc .use:hover{color:#fff;background:var(--rust)}
+  .pc.sel .use{color:#fff;background:var(--rust)}
+
+  /* ---------- layout ---------- */
+  .cols{display:grid;gap:16px;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
+  .cols > *{min-width:0}
+  @media(max-width:1080px){.cols{grid-template-columns:minmax(0,1fr)}}
+
+  /* ---------- dice ---------- */
+  .side{margin:10px 0}
+  .sidehead{display:flex;align-items:baseline;gap:9px;margin-bottom:6px}
+  .sidehead .who{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-l);font-weight:600}
+  .sidehead .cnt{font-size:12px;color:#7f7460;font-style:italic}
+  .sidehead .hits{margin-left:auto;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#7f7460}
+  .sidehead .hits b{font-size:24px;color:var(--parch-e);font-weight:700;font-variant-numeric:tabular-nums;
+    vertical-align:-2px;margin-left:5px}
+  .dice{display:flex;gap:8px;flex-wrap:wrap;min-height:52px;align-items:center;
+    padding:9px;border:1px dashed rgba(184,145,63,.2);border-radius:4px;
+    background:rgba(0,0,0,.16)}
+  .die{
+    width:44px;height:44px;border-radius:6px;position:relative;flex:0 0 auto;
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    padding:6px;background:#2a2320;border:1px solid #3d342d;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 2px 5px rgba(0,0,0,.5);
+  }
+  .die i{border-radius:50%;background:#6e6154;align-self:center;justify-self:center;
+    width:7px;height:7px;display:block}
+  .die.hit{
+    background:linear-gradient(160deg,var(--parch-e),var(--parch-d));
+    border-color:var(--gold-l);
+    box-shadow:0 0 0 1px rgba(217,180,95,.5), 0 0 16px rgba(184,145,63,.32), 0 2px 6px rgba(0,0,0,.5);
+  }
+  .die.hit i{background:#241a12;width:8px;height:8px}
+  /* "the 4s, 5s and 6s you let lie" — these were NOT picked up on the last escalation */
+  .die.lying::after{
+    content:"";position:absolute;inset:-5px;border-radius:9px;pointer-events:none;
+    border:1px dashed rgba(217,180,95,.75);
+  }
+  .die.picked{animation:tumble .42s ease-out}
+  .die.fresh{animation:drop .3s ease-out}
+  @keyframes tumble{
+    0%{transform:translateY(0) rotate(0) scale(1)}
+    35%{transform:translateY(-16px) rotate(140deg) scale(1.1)}
+    70%{transform:translateY(-4px) rotate(280deg) scale(1.02)}
+    100%{transform:translateY(0) rotate(360deg) scale(1)}
+  }
+  @keyframes drop{
+    0%{transform:translateY(-14px) scale(.7);opacity:0}
+    100%{transform:translateY(0) scale(1);opacity:1}
+  }
+  /* pip placement */
+  .p1{grid-area:1/1} .p2{grid-area:1/3} .p3{grid-area:2/1} .p4{grid-area:2/2}
+  .p5{grid-area:2/3} .p6{grid-area:3/1} .p7{grid-area:3/3}
+  .pm{grid-area:2/2}
+
+  /* ---------- status ---------- */
+  .status{
+    margin:12px 0 4px;padding:12px 14px;border-radius:4px;font-size:16.5px;
+    border-left:3px solid var(--muted);background:rgba(0,0,0,.22);color:#b9ac92;
+  }
+  .status b{color:var(--parch-e)}
+  .status.win{border-left-color:var(--gold);color:var(--gold-l);background:rgba(184,145,63,.09)}
+  .status.lose{border-left-color:var(--rust-l);color:#e08a6c;background:rgba(140,47,28,.14)}
+  .status.tie{border-left-color:#5e7b86;color:#9fc0cd;background:rgba(94,123,134,.12)}
+  .status .note{display:block;font-size:12.5px;font-style:italic;margin-top:4px;color:#8d8267}
+
+  /* ---------- ladder ---------- */
+  .ladder{margin-top:12px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .lv{display:flex;gap:11px;padding:8px 12px;font-size:13.2px;color:#8d8267;
+    border-bottom:1px solid rgba(184,145,63,.14);align-items:flex-start}
+  .lv:last-child{border-bottom:none}
+  .lv .n{font-size:10px;letter-spacing:.1em;color:#6b5f4b;padding-top:3px;min-width:44px;
+    text-transform:uppercase}
+  .lv.cur{background:rgba(140,47,28,.17);color:var(--parch-e)}
+  .lv.cur .n{color:var(--rust-l);font-weight:700}
+  .lv.done{opacity:.42}
+  .laddernote{font-size:11.5px;font-style:italic;color:#7f7460;padding:7px 12px;
+    background:rgba(0,0,0,.2);border-top:1px solid rgba(184,145,63,.14)}
+
+  /* ---------- x spend menu ---------- */
+  .spend{display:flex;flex-direction:column;gap:5px}
+  .sp{
+    display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;
+    background:rgba(232,220,192,.04);border:1px solid rgba(184,145,63,.18);
+    border-radius:3px;padding:7px 10px;cursor:pointer;font-family:inherit;
+    color:#a99d85;font-size:12.6px;line-height:1.38;transition:.13s;
+  }
+  .sp:hover:not(:disabled){background:rgba(184,145,63,.15);color:var(--parch-e);border-color:var(--gold)}
+  .sp:disabled{opacity:.32;cursor:not-allowed}
+  .sp .cost{
+    flex:0 0 auto;min-width:32px;text-align:center;font-weight:700;color:var(--rust-l);
+    font-size:13.5px;border-right:1px solid rgba(184,145,63,.2);padding-right:9px;align-self:stretch;
+  }
+  .sp .cost small{display:block;font-size:8px;letter-spacing:.1em;color:#6b5f4b;font-weight:400}
+
+  /* ---------- log ---------- */
+  #log{
+    font-family:"Consolas","SF Mono",Menlo,monospace;font-size:11.8px;line-height:1.55;
+    max-height:270px;overflow-y:auto;background:rgba(0,0,0,.28);border:1px solid rgba(184,145,63,.16);
+    border-radius:3px;padding:10px 12px;color:#8d8267;white-space:pre-wrap;
+  }
+  #log .e{padding:2px 0;border-bottom:1px solid rgba(184,145,63,.07)}
+  #log .e:last-child{border-bottom:none}
+  #log b{color:var(--gold-l);font-weight:600}
+  #log i{color:var(--parch-e);font-style:normal}
+
+  .hint{font-size:11.5px;font-style:italic;color:#6f6551;margin:6px 0 0}
+  .warn{
+    margin:10px 0;padding:9px 12px;border-radius:3px;font-size:13px;
+    background:rgba(140,47,28,.2);border:1px solid var(--rust-l);color:#eda98d;
+  }
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{
+    padding:4px 9px;font-size:11.5px;border-radius:2px;cursor:pointer;font-family:inherit;
+    background:rgba(232,220,192,.05);border:1px solid var(--line);color:#a99d85;
+  }
+  .chip:hover{background:rgba(184,145,63,.18);color:var(--parch-e)}
+  .chip.on{background:var(--rust);border-color:var(--rust-l);color:#fff}
+  .side-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .crewline{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#a99d85;
+    padding:5px 8px;border:1px solid rgba(184,145,63,.15);border-radius:3px;
+    background:rgba(0,0,0,.14);margin-bottom:5px}
+  .crewline .who{flex:1}
+  .big-out{font-size:30px;font-weight:700;color:var(--parch-e);font-variant-numeric:tabular-nums}
+  details summary{cursor:pointer;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--gold-l);list-style:none;padding:4px 0}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"▸ ";color:var(--muted)}
+  details[open] summary::before{content:"▾ "}
+  /* ---------- modal ----------
+     In-page rather than window.prompt/confirm: those are blocked when the page is
+     framed (as it is when hosted), and this reads better besides. */
+  .modal[hidden]{display:none}
+  .modal{
+    position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,9,11,.78);padding:20px;
+  }
+  .sheet{
+    background:linear-gradient(168deg,#1e262b,#141a1e);border:1px solid var(--gold);
+    border-radius:5px;padding:22px 24px;max-width:560px;width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.7);
+  }
+  .sheet h3{
+    margin:0 0 10px;font-size:13px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--gold-l);font-weight:600;
+  }
+  .sheet #mBody{font-size:14px;color:#b9ac92;white-space:pre-line;line-height:1.55}
+  .sheet #mNum{margin-top:14px;font-size:20px;width:100px;padding:8px}
+  .sheet #mText{
+    margin-top:14px;width:100%;min-height:110px;padding:9px;font-size:12px;
+    font-family:"Consolas","SF Mono",Menlo,monospace;resize:vertical;
+    background:rgba(232,220,192,.07);border:1px solid var(--line);color:var(--parch);
+    border-radius:3px;
+  }
+  .sheet #mText:focus{outline:none;border-color:var(--gold)}
+  .mbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:99;
+    background:#241c17;border:1px solid var(--gold);color:var(--parch-e);
+    padding:11px 20px;border-radius:4px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.6);
+    opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;max-width:620px;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <h1><small>Poison'd</small>The Dice</h1>
+  <div class="rule"></div>
+  <p class="sub">Dice here are objects on the table, not results. They stay put, get picked up, and get rerolled.</p>
+</header>
+
+<!-- ============ ROSTER ============ -->
+<div class="roster" id="roster"></div>
+<div class="row center" style="margin:-6px 0 18px;font-size:12px;color:#6f6551">
+  <span style="font-style:italic">Stats save in this browser. Brinksmanship computes itself.</span>
+  <button class="btn sm" id="addPc">+ pirate</button>
+  <button class="btn sm" id="shareRoster">Share roster…</button>
+  <button class="btn sm" id="loadRoster">Load roster…</button>
+  <button class="btn sm" id="resetAll" style="margin-left:auto">Reset everything</button>
+</div>
+
+<div class="cols">
+
+  <!-- ============ LEFT: FIGHT ============ -->
+  <div>
+    <div class="panel">
+      <h2>The Fight</h2>
+
+      <div class="row">
+        <label class="f">Our side
+          <select id="ourPc" style="min-width:150px"></select>
+        </label>
+        <label class="f">Withheld <span title="A bargain called in: the holder withholds dice equal to your Soul">⚓</span>
+          <input type="number" id="withheld" value="0" min="0">
+        </label>
+        <span style="color:#6b5f4b;padding-bottom:7px;font-size:18px">vs</span>
+        <label class="f">Their side
+          <input type="text" id="theirName" value="The enemy" style="width:150px">
+        </label>
+        <label class="f">Opponent
+          <select id="theirMode">
+            <option value="npc">NPC / mob / ship</option>
+            <option value="pc">Another pirate</option>
+          </select>
+        </label>
+        <label class="f" id="wrapTheirPc" style="display:none">Which
+          <select id="theirPc" style="min-width:140px"></select>
+        </label>
+        <label class="f" id="wrapTheirProfile">Their Profile
+          <input type="number" id="theirProfile" value="2">
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <label class="f">Matchup — the ladder
+          <select id="matchup" style="min-width:230px"></select>
+        </label>
+        <div style="flex:1"></div>
+        <button class="btn big primary" id="rollFight">Roll the fight</button>
+      </div>
+
+      <div id="setupNote"></div>
+
+      <details style="margin-top:10px">
+        <summary>Fighting on a side — the captain leads</summary>
+        <p class="hint" style="margin-bottom:8px">The leader hands one die to each pirate fighting under them; each adds a
+          second from the bank. Roll them in and the leader gets both. Hold them back and the leader loses both — and that
+          player marks 2&nbsp;Xs for disobeying.</p>
+        <div id="crew"></div>
+      </details>
+
+      <!-- dice -->
+      <div class="side">
+        <div class="sidehead">
+          <span class="who" id="ourLabel">Ours</span>
+          <span class="cnt" id="ourCount"></span>
+          <span class="hits">hits <b id="ourHits">—</b></span>
+        </div>
+        <div class="dice" id="ourDice"></div>
+      </div>
+
+      <div class="side">
+        <div class="sidehead">
+          <span class="who" id="theirLabel">Theirs</span>
+          <span class="cnt" id="theirCount"></span>
+          <span class="hits">hits <b id="theirHits">—</b></span>
+        </div>
+        <div class="dice" id="theirDice"></div>
+      </div>
+
+      <div class="status" id="status">Set both sides and roll.</div>
+
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="escUs">Escalate — <b>ours</b></button>
+        <button class="btn" id="escThem">Escalate — theirs</button>
+        <button class="btn" id="breakTie">Both reroll lowest</button>
+        <button class="btn" id="gmCheck" title="The GM doesn't escalate at will: roll the NPC's Brinksmanship aside and escalate only on 2+ hits">GM escalation check</button>
+        <div style="flex:1"></div>
+        <button class="btn" id="endFight">End the fight</button>
+      </div>
+      <p class="hint" id="levelNote"></p>
+
+      <div class="ladder" id="ladder"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Spending Xs</h2>
+      <p class="hint" style="margin:0 0 10px">Spends from <b id="spenderName">—</b>. Clicking deducts the Xs and logs it.
+        Formally the loser spends first, then the winner, alternating — in practice, whoever wants to.</p>
+      <div class="spend" id="spend"></div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: SUCCESS ROLLS + SUNDRIES ============ -->
+  <div>
+    <div class="panel">
+      <h2>Success Roll</h2>
+      <label class="f" style="margin-bottom:10px">When the fiction says…
+        <select id="situation"></select>
+      </label>
+      <div class="row center">
+        <div style="font-size:14px;color:#a99d85" id="srPair">—</div>
+        <div style="flex:1"></div>
+        <button class="btn primary" id="rollSuccess">Roll</button>
+      </div>
+
+      <div class="side" style="margin-top:14px">
+        <div class="sidehead">
+          <span class="who" id="srYouLabel">You</span>
+          <span class="hits">hits <b id="srYouHits">—</b></span>
+        </div>
+        <div class="dice" id="srYouDice"></div>
+      </div>
+      <div class="side">
+        <div class="sidehead">
+          <span class="who">The GM</span>
+          <span class="cnt" id="srGmNote"></span>
+          <span class="hits">counts <b id="srGmHits">—</b></span>
+        </div>
+        <div class="dice" id="srGmDice"></div>
+      </div>
+
+      <div class="status" id="srStatus">The GM throws one away first — the devil looks after his own.</div>
+      <button class="btn primary" id="srMark" style="display:none;margin-top:8px">Mark the Xs</button>
+
+      <h3 class="sec">What the GM throws away</h3>
+      <div class="chips" id="discardChips"></div>
+      <p class="hint">The book contradicts itself: the rule says a <i>scoring</i> die, the p.12 example throws away
+        <i>a die</i>. Pick your table's ruling once. <b>Abandoned to fate</b> suspends the discard entirely.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Sundry Rolls</h2>
+
+      <h3 class="sec">Plunder — sum the pips, don't count hits</h3>
+      <div class="row center">
+        <label class="f">Prize named
+          <input type="number" id="prizeN" value="4" min="2" max="6">
+        </label>
+        <button class="btn" id="rollPlunder">Roll plunder</button>
+        <div style="flex:1"></div>
+        <div class="big-out" id="plunderOut">—</div>
+      </div>
+      <div class="dice" id="plunderDice" style="margin-top:8px"></div>
+
+      <h3 class="sec">Urgency — roll and mark the card</h3>
+      <div class="row center">
+        <button class="btn" id="rollUrgency">Roll urgency</button>
+        <div style="font-size:13px;color:#a99d85">Marked: <b id="urgMarks" style="color:var(--parch-e)">—</b></div>
+        <button class="btn sm" id="clearUrg">Clear card</button>
+      </div>
+      <p class="hint" id="urgNote">A match fulfils the urgency and its consequent fortune enters play at once.</p>
+
+      <h3 class="sec">Quick GM rolls</h3>
+      <div class="row center">
+        <button class="btn sm" id="rollNpc">NPC Brinksmanship</button>
+        <button class="btn sm" id="rollStorm">The storm's Profile</button>
+        <button class="btn sm" id="rollDisease">Disease Brinksmanship</button>
+      </div>
+      <div style="margin-top:8px;font-size:14px;color:var(--parch-e)" id="quickOut"></div>
+    </div>
+
+    <div class="panel">
+      <h2>The Log</h2>
+      <div id="log"></div>
+      <div class="side-tools">
+        <button class="btn sm" id="copyLast">Copy last roll for Discord</button>
+        <button class="btn sm" id="copyAll">Copy whole log</button>
+        <button class="btn sm" id="clearLog" style="margin-left:auto">Clear</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle"></h3>
+    <div id="mBody"></div>
+    <input type="number" id="mNum" min="0">
+    <textarea id="mText" spellcheck="false"></textarea>
+    <div class="mbtns">
+      <button class="btn" id="mCancel">Cancel</button>
+      <button class="btn primary" id="mOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------
+   Poison'd dice. Mirrors build/dice.py and build/apps-script/Dice.gs,
+   which are covered by tests/test_dice.py — including the book's worked
+   fight (Hugh McMinn vs Tom Reed, p.14-15) replayed die by die.
+   Rule cites are to rules/RULES-DIGEST.md.
+------------------------------------------------------------------- */
+
+const d6 = () => Math.floor(Math.random() * 6) + 1;
+const rollN = n => Array.from({length: Math.max(0, n)}, d6);
+const hits = dice => dice.filter(d => d >= 4).length;          // 4, 5 and 6 count (§3, §4)
+const pips = dice => dice.reduce((a, b) => a + b, 0);          // plunder only (§8)
+
+/** 'pick up all your 1s, 2s and 3s, reroll them, and return them to the
+ *  4s, 5s and 6s you let lie.' Returns [newDice, indexesPickedUp]. */
+function escalatePool(dice){
+  const picked = [];
+  const out = dice.map((d, i) => { if (d >= 4) return d; picked.push(i); return d6(); });
+  return [out, picked];
+}
+/** 'we each reroll our lowest die' — exactly one die (§4). */
+function rerollLowest(dice){
+  if (!dice.length) return [dice, []];
+  let lo = 0;
+  for (let i = 1; i < dice.length; i++) if (dice[i] < dice[lo]) lo = i;
+  const out = dice.slice(); out[lo] = d6();
+  return [out, [lo]];
+}
+
+const MAX_LEVEL = 2;
+
+/* ---------------- the four success-roll pairings (§3) ---------------- */
+const SITUATIONS = [
+  { label: "Acts despite pain or duress · presses on exhausted · endures torture, deprivation or hardship · practises a skill in bad conditions",
+    short: "Endures", you: "soul", gm: "devil" },
+  { label: "Goes into danger or does something personally risky — but is not fighting",
+    short: "Goes into danger", you: "devil", gm: "ambition" },
+  { label: "Must keep still, or act with stealth, deceit, cunning or great care",
+    short: "Stealth & cunning", you: "ambition", gm: "brutality" },
+  { label: "Attacks a helpless, unsuspecting or entirely outmatched victim",
+    short: "Attacks the helpless", you: "brutality", gm: "soul" },
+  { label: "— Death: may he become a ghost?", short: "Death", you: "ambition", gm: "soul" },
+  { label: "— Judgment: silent rest, or the Pit?", short: "Judgment", you: "soul", gm: "devil" },
+  { label: "— Resists debauchery, Hell, or becalmment", short: "Resists", you: "soul", gm: "devil" },
+  { label: "— Stealing stored plunder past the guard", short: "Plunder by stealth", you: "ambition", gm: "brutality" }
+];
+
+/* ---------------- the escalation ladders (§6) ---------------- */
+const LADDERS = {
+  "fist to fist": { note: "All fist fights mean battering and bruising, to both.",
+    esc: "Losing your temper · getting serious · fighting dirtier · fighting more recklessly · pinning your opponent · changing the arena · improvising a weapon.",
+    lv: ["Your pride, vs humbling your enemy",
+         "Being stunned, knocked down or pinned, vs doing the same",
+         "Broken bones, a smashed face or a broken head, vs doing the same"] },
+  "knife to knife": { note: "All knife fights mean minor cuts, bruises and near things, to both.",
+    esc: "Losing your temper · scenting blood · fighting dirtier · fighting more carefully · a new weapon · knocking your opponent down · getting their back to the wall.",
+    lv: ["A scarring but not deadly wound, vs giving one",
+         "A disfiguring or disabling wound, vs giving one",
+         "A deadly wound, vs giving one"] },
+  "sword to sword": { note: "If the loser can't easily withdraw, he comes under the winner's power.",
+    esc: "Getting serious · going for the throat · provoking your opponent's temper · disarming him · driving him to a bad position · a new weapon.",
+    lv: ["Giving first blood, vs taking first blood",
+         "Taking a deadly wound, vs giving one",
+         "Being killed outright, vs killing your enemy outright"] },
+  "gun to gun": { note: "Standing down means submitting to the will of your enemy.",
+    esc: "Raising, levelling, and firing your gun.",
+    lv: ["Standing down to your enemy's held gun, vs his to yours",
+         "Standing down to your enemy's levelled gun, vs his to yours",
+         "A deadly wound, vs giving one"] },
+  "pursuit — you pursuing": { note: "Escaping instead? Reverse it.",
+    esc: "Driving harder before the wind · cutting sharper against it · making for fog, shallows or treacherous waters · settling in for a long hunt · testing masts and sails · lightening your load.",
+    lv: ["Falling behind, vs engaging your quarry at its captain's choice of range",
+         "Foundering and losing your quarry, vs engaging at a range chosen at random",
+         "Foundering your ship to wear & breakage, vs engaging at your choice of range"] },
+  "pursuit — you escaping": { note: "The reverse of pursuing. Xs can't buy level harm here.",
+    esc: "Driving harder before the wind · cutting sharper against it · making for fog, shallows or treacherous waters · testing masts and sails · lightening your load.",
+    lv: ["Your quarry engaging you at your captain's choice of range, vs falling behind",
+         "Engaging at a range chosen at random, vs foundering and losing you",
+         "Engaging at their choice of range, vs foundering to wear & breakage"] },
+  "cannon to cannon, at range": { note: "",
+    esc: "Heated or chain shot · drawing closer · holding steady under increasing fire · robbing your enemy's wind · cutting across his bow or stern · depleting your powder and balls · rallying your gunnery crew to better speed.",
+    lv: ["Your ship driven off course to avoid fire, vs your enemy's",
+         "Your ship battered into wear & breakage, vs your enemy's",
+         "Your ship broken and disabled with many crew killed, vs your enemy's"] },
+  "broadside to broadside": { note: "If it escalates even once, the WINNING ship is battered into wear & breakage too. If the loser survives it can't break away — it's within reach for grappling and boarding.",
+    esc: "Holding hard and exchanging another broadside · double- or triple-loading your cannons.",
+    lv: ["Your ship battered into wear & breakage, vs your enemy's",
+         "Your ship broken and disabled with many crew killed, vs your enemy's",
+         "Your ship sunk, vs your enemy's"] },
+  "company to company, crew, or mob": { note: "In a melee, if the losing side can't easily withdraw it comes under the power of the winning.",
+    esc: "Digging in · savvy tactics · seizing sudden opportunities · deceit or surprise · stepping up the brutality · focusing attacks on your enemy's officers or the civilians under her guard.",
+    lv: ["Many of your own beaten and bloodied, vs many of your enemy's",
+         "A few of your own killed, vs a few of your enemy's",
+         "Many of your own killed, vs many of your enemy's"] }
+};
+
+/* ---------------- state ---------------- */
+const KEY = "poisond-roller-v1";
+const blank = (n) => ({ id: Math.random().toString(36).slice(2, 8), name: n,
+  soul: 4, devil: 4, brutality: 3, ambition: 3, profile: 2, xs: 0 });
+
+let S = {
+  pirates: [blank("Pirate the first"), blank("Pirate the second"),
+            blank("Pirate the third"), blank("Pirate the fourth")],
+  selected: null,
+  discard: "hit",
+  urgency: [],
+  fight: { ourId: null, theirName: "The enemy", theirMode: "npc", theirProfile: 2,
+           theirPc: null, matchup: "knife to knife", withheld: 0,
+           ours: [], theirs: [], level: 0, wasTied: false, open: false,
+           lying: { ours: [], theirs: [] }, crew: {} },
+  sr: { situation: 0, you: [], gm: [], adv: 0, pending: false },
+  log: []
+};
+
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+function load(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const p = JSON.parse(raw); S = Object.assign(S, p);
+      S.fight = Object.assign({ lying:{ours:[],theirs:[]}, crew:{} }, S.fight); }
+  } catch(e){}
+  if (!S.selected || !S.pirates.some(p => p.id === S.selected)) S.selected = S.pirates[0]?.id || null;
+  if (!S.fight.ourId || !S.pirates.some(p => p.id === S.fight.ourId)) S.fight.ourId = S.selected;
+}
+
+const $ = id => document.getElementById(id);
+const pc = id => S.pirates.find(p => p.id === id) || null;
+const brinks = p => p ? Math.max(p.soul, p.devil, p.brutality, p.ambition) : 0;   // §1
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+let toastT;
+function toast(msg){
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 4200);
+}
+
+/* ---------------- in-page modal ----------------
+   Replaces window.prompt/confirm, which browsers block when the page is framed —
+   as it is wherever this gets hosted. Resolves to a number, a string, true, or null. */
+let mResolve = null;
+function ask(o){
+  return new Promise(res => {
+    mResolve = res;
+    $("mTitle").textContent = o.title;
+    $("mBody").textContent = o.body || "";
+    $("mBody").style.display = o.body ? "" : "none";
+    $("mNum").style.display = o.number ? "" : "none";
+    $("mText").style.display = o.text ? "" : "none";
+    if (o.number) $("mNum").value = o.value == null ? 1 : o.value;
+    if (o.text) $("mText").value = o.value || "";
+    $("mOk").textContent = o.ok || "OK";
+    $("mCancel").style.display = o.cancel === false ? "none" : "";
+    $("modal").hidden = false;
+    setTimeout(() => { const f = o.number ? $("mNum") : o.text ? $("mText") : $("mOk"); f.focus(); f.select && f.select(); }, 30);
+  });
+}
+function closeModal(v){
+  if (!mResolve) return;
+  $("modal").hidden = true;
+  const r = mResolve; mResolve = null; r(v);
+}
+$("mOk").addEventListener("click", () => closeModal(
+  $("mNum").style.display !== "none" ? (Number($("mNum").value) || 0)
+  : $("mText").style.display !== "none" ? $("mText").value.trim()
+  : true));
+$("mCancel").addEventListener("click", () => closeModal(null));
+$("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(null); });
+$("modal").addEventListener("keydown", e => {
+  if (e.key === "Escape") closeModal(null);
+  if (e.key === "Enter" && e.target.tagName !== "TEXTAREA"){ e.preventDefault(); $("mOk").click(); }
+});
+
+/* ---------------- dice rendering ---------------- */
+const PIPS = { 1:["pm"], 2:["p1","p7"], 3:["p1","pm","p7"], 4:["p1","p2","p6","p7"],
+               5:["p1","p2","pm","p6","p7"], 6:["p1","p2","p3","p5","p6","p7"] };
+function dieHTML(v, cls){
+  return '<div class="die ' + (v >= 4 ? "hit " : "") + (cls || "") + '" data-v="' + v + '">' +
+         PIPS[v].map(p => '<i class="' + p + '"></i>').join("") + "</div>";
+}
+/** anim: {picked:[i], fresh:[i], lying:[i]} */
+function renderDice(el, dice, anim){
+  anim = anim || {};
+  el.innerHTML = dice.map((v, i) => {
+    let c = "";
+    if ((anim.picked || []).includes(i)) c = "picked";
+    else if ((anim.fresh || []).includes(i)) c = "fresh";
+    if ((anim.lying || []).includes(i)) c += " lying";
+    return dieHTML(v, c);
+  }).join("") || '<span style="color:#5c5342;font-size:12.5px;font-style:italic;padding:0 6px">no dice on the table</span>';
+}
+
+/* ---------------- log ---------------- */
+function logIt(head, body){
+  S.log.unshift({ t: new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}), head, body });
+  S.log = S.log.slice(0, 120);
+  drawLog(); save();
+}
+function drawLog(){
+  $("log").innerHTML = S.log.map(e =>
+    '<div class="e"><b>' + e.t + "</b>  <i>" + esc(e.head) + "</i>" +
+    (e.body ? "\n" + esc(e.body) : "") + "</div>").join("") ||
+    '<span style="color:#5c5342">Nothing rolled yet.</span>';
+}
+const faces = d => d.map(v => (v >= 4 ? "[" + v + "]" : String(v))).join(" ");
+function plain(e){ return e.head + (e.body ? "\n" + e.body : ""); }
+/** Hosted pages are framed, and framed pages often can't reach the async clipboard.
+ *  Fall back to execCommand, then to showing the text for a manual copy. */
+function copy(text, what){
+  const done = () => toast(what + " copied — paste it into Discord.");
+  const manual = () => ask({ title: "Copy this", body: "Your browser wouldn't let the page write to the clipboard. Select it all and copy — Ctrl+A, then Ctrl+C.", text: true, value: text, ok: "Done", cancel: false });
+  const legacy = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch(e){}
+    ta.remove();
+    ok ? done() : manual();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(done, legacy);
+  else legacy();
+}
+
+/* ================= ROSTER ================= */
+function drawRoster(){
+  $("roster").innerHTML = S.pirates.map(p => {
+    const b = brinks(p);
+    return '<div class="pc' + (p.id === S.selected ? " sel" : "") + '" data-id="' + p.id + '">' +
+      '<button class="use" data-act="use">' + (p.id === S.selected ? "acting" : "act") + "</button>" +
+      '<input class="nm" data-f="name" value="' + esc(p.name) + '" maxlength="28">' +
+      '<div class="stats">' +
+        ["soul","devil","brutality","ambition"].map(k =>
+          '<div class="st"><span>' + k.slice(0,4) + '</span>' +
+          '<input type="number" data-f="' + k + '" value="' + p[k] + '" min="0" max="20"></div>').join("") +
+      "</div>" +
+      '<div class="derived">' +
+        '<span>Brinks <b>' + b + "</b></span>" +
+        '<span class="pf">Profile <input type="number" data-f="profile" value="' + p.profile + '" min="0" max="20"></span>' +
+        '<span class="xbox"><span class="xlabel">Xs</span>' +
+          '<button class="xbtn" data-act="x-">–</button>' +
+          '<span class="xn' + (p.xs ? "" : " zero") + '">' + p.xs + "</span>" +
+          '<button class="xbtn" data-act="x+">+</button></span>' +
+      "</div></div>";
+  }).join("");
+}
+$("roster").addEventListener("input", e => {
+  const card = e.target.closest(".pc"); if (!card) return;
+  const p = pc(card.dataset.id), f = e.target.dataset.f; if (!p || !f) return;
+  p[f] = f === "name" ? e.target.value : Math.max(0, Number(e.target.value) || 0);
+  if (f !== "name") card.querySelector(".derived b").textContent = brinks(p);
+  save(); refreshPickers(); drawFight(); drawSuccessPair();
+});
+$("roster").addEventListener("click", e => {
+  const card = e.target.closest(".pc"); if (!card) return;
+  const p = pc(card.dataset.id), act = e.target.dataset.act; if (!p || !act) return;
+  if (act === "use"){ S.selected = p.id; S.fight.ourId = p.id; }
+  if (act === "x+") p.xs++;
+  if (act === "x-") p.xs = Math.max(0, p.xs - 1);
+  save(); drawRoster(); refreshPickers(); drawFight(); drawSuccessPair(); drawSpend();
+});
+
+function refreshPickers(){
+  ["ourPc","theirPc"].forEach(id => {
+    const sel = $(id), cur = id === "ourPc" ? S.fight.ourId : S.fight.theirPc;
+    sel.innerHTML = S.pirates.map(p =>
+      '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + ">" +
+      esc(p.name) + " — Brinks " + brinks(p) + "</option>").join("");
+  });
+  drawCrew();
+}
+
+/* ================= SUCCESS ROLLS (§3) ================= */
+$("situation").innerHTML = SITUATIONS.map((s, i) =>
+  '<option value="' + i + '">' + esc(s.short) + " — " + esc(s.label) + "</option>").join("");
+$("situation").addEventListener("change", () => { S.sr.situation = +$("situation").value; drawSuccessPair(); save(); });
+
+const DISCARDS = [
+  ["hit",  "A scoring die",  "The rule text. The GM's hit count drops by one."],
+  ["die",  "Any one die",    "The p.12 example — 3 3 6 counts for 1. Only bites when every GM die is a hit."],
+  ["none", "Nothing",        "Abandoned to fate is in play. The devil no longer looks after his own."]
+];
+function drawDiscards(){
+  $("discardChips").innerHTML = DISCARDS.map(([v, l, t]) =>
+    '<button class="chip' + (S.discard === v ? " on" : "") + '" data-v="' + v + '" title="' + esc(t) + '">' +
+    esc(l) + "</button>").join("");
+}
+$("discardChips").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  S.discard = b.dataset.v; drawDiscards(); save();
+  const d = DISCARDS.find(x => x[0] === S.discard);
+  toast("GM discard: " + d[1] + ". " + d[2]);
+});
+
+/** The GM's count after 'I throw one away first'. OPEN TABLE RULING — see DECISIONS.md. */
+function gmCount(dice){
+  const h = hits(dice);
+  if (S.discard === "none") return h;
+  if (S.discard === "die")  return (dice.length && dice.every(d => d >= 4)) ? h - 1 : h;
+  return Math.max(0, h - 1);
+}
+
+function drawSuccessPair(){
+  const p = pc(S.selected), s = SITUATIONS[S.sr.situation];
+  if (!p){ $("srPair").textContent = "—"; return; }
+  $("srPair").innerHTML = "<b style='color:var(--parch-e)'>" + esc(p.name) + "</b> rolls <b style='color:var(--gold-l)'>" +
+    s.you + " " + p[s.you] + "</b> · the GM rolls <b style='color:var(--gold-l)'>" + s.gm + " " + p[s.gm] + "</b>";
+  $("srYouLabel").textContent = p.name;
+}
+
+$("rollSuccess").addEventListener("click", () => {
+  const p = pc(S.selected); if (!p) return;
+  const s = SITUATIONS[S.sr.situation];
+  const you = rollN(p[s.you]), gm = rollN(p[s.gm]);
+  S.sr.you = you; S.sr.gm = gm;
+  const yh = hits(you), gc = gmCount(gm);
+  S.sr.adv = Math.max(0, yh - gc);
+
+  renderDice($("srYouDice"), you, { fresh: you.map((_, i) => i) });
+  renderDice($("srGmDice"), gm, { fresh: gm.map((_, i) => i) });
+  $("srYouHits").textContent = yh;
+  $("srGmHits").textContent = gc;
+  $("srGmNote").textContent = hits(gm) + " hits, " +
+    (S.discard === "none" ? "nothing thrown away (abandoned to fate)" :
+     S.discard === "die" ? "one die thrown away" : "one scoring die thrown away");
+
+  const st = $("srStatus");
+  if (S.sr.adv > 0){
+    st.className = "status win";
+    st.innerHTML = "<b>Success, with advantage " + S.sr.adv + ".</b> Mark " + S.sr.adv + " X" +
+      (S.sr.adv === 1 ? "" : "s") + ".<span class='note'>Xs are good only for fights. If a fight is conceivably " +
+      "at hand, the GM may bring it now — with no chance for more success rolls first.</span>";
+    $("srMark").style.display = ""; $("srMark").textContent = "Mark " + S.sr.adv + " X" + (S.sr.adv === 1 ? "" : "s") + " for " + p.name;
+  } else {
+    st.className = "status lose";
+    st.innerHTML = "<b>Failure</b> — or success to no advantage.<span class='note'>A failed success roll lets the GM " +
+      "bring the fight right now, eliding whatever the player was hoping for.</span>";
+    $("srMark").style.display = "none";
+  }
+  logIt(p.name + " — success roll: " + s.you + " vs " + s.gm,
+    "  " + p.name + "  " + faces(you) + "  → " + yh + " hits\n" +
+    "  the GM   " + faces(gm) + "  → " + hits(gm) + " hits, counts " + gc + "\n" +
+    "  " + (S.sr.adv > 0 ? "SUCCESS, advantage " + S.sr.adv + " — mark " + S.sr.adv + " X" + (S.sr.adv === 1 ? "" : "s")
+                         : "FAILURE, or success to no advantage"));
+  save();
+});
+
+$("srMark").addEventListener("click", () => {
+  const p = pc(S.selected); if (!p || !S.sr.adv) return;
+  p.xs += S.sr.adv;
+  logIt(p.name + " marks " + S.sr.adv + " X" + (S.sr.adv === 1 ? "" : "s") + " — now " + p.xs, "");
+  $("srMark").style.display = "none";
+  drawRoster(); drawSpend(); save();
+});
+
+/* ================= THE FIGHT (§4) ================= */
+$("matchup").innerHTML = Object.keys(LADDERS).map(k =>
+  '<option value="' + esc(k) + '"' + (k === S.fight.matchup ? " selected" : "") + ">" + esc(k) + "</option>").join("");
+
+["ourPc","theirName","theirMode","theirPc","theirProfile","matchup","withheld"].forEach(id => {
+  $(id).addEventListener("change", readSetup);
+  $(id).addEventListener("input", readSetup);
+});
+function readSetup(){
+  const F = S.fight;
+  F.ourId = $("ourPc").value;
+  F.theirName = $("theirName").value;
+  F.theirMode = $("theirMode").value;
+  F.theirPc = $("theirPc").value;
+  F.theirProfile = Number($("theirProfile").value) || 0;
+  F.matchup = $("matchup").value;
+  F.withheld = Math.max(0, Number($("withheld").value) || 0);
+  $("wrapTheirPc").style.display = F.theirMode === "pc" ? "" : "none";
+  $("wrapTheirProfile").style.display = F.theirMode === "pc" ? "none" : "";
+  if (F.theirMode === "pc"){ const t = pc(F.theirPc); if (t) F.theirName = t.name; }
+  save(); drawFight(); drawSpend(); drawCrew();
+}
+
+/** Their Profile, whichever mode. */
+function theirProfileNow(){
+  const F = S.fight;
+  return F.theirMode === "pc" ? (pc(F.theirPc)?.profile ?? 0) : F.theirProfile;
+}
+/** PC vs NPC: the GM rolls 6 dice plus or minus the Profile difference (§4). */
+function theirDiceCount(){
+  const F = S.fight, us = pc(F.ourId);
+  if (F.theirMode === "pc") return brinks(pc(F.theirPc));
+  return Math.max(0, 6 + (theirProfileNow() - (us?.profile ?? 0)));
+}
+/** Our pool: Brinksmanship, plus any crew fighting under us, less anything withheld. */
+function ourDiceCount(){
+  const F = S.fight, us = pc(F.ourId);
+  if (!us) return 0;
+  let n = brinks(us);
+  const rolled = Object.entries(F.crew).filter(([id, v]) => v === "roll" && id !== F.ourId).length;
+  const held   = Object.entries(F.crew).filter(([id, v]) => v === "hold" && id !== F.ourId).length;
+  // The leader gives one die to each follower; a follower who rolls returns two.
+  if (rolled + held > 0) n = n - (rolled + held) + rolled * 2;
+  return Math.max(0, n - F.withheld);
+}
+
+function drawCrew(){
+  const F = S.fight, leader = pc(F.ourId);
+  $("crew").innerHTML = S.pirates.filter(p => p.id !== F.ourId).map(p => {
+    const v = F.crew[p.id] || "out";
+    return '<div class="crewline" data-id="' + p.id + '"><span class="who">' + esc(p.name) + "</span>" +
+      ["out","roll","hold"].map(k =>
+        '<button class="chip' + (v === k ? " on" : "") + '" data-v="' + k + '">' +
+        (k === "out" ? "not in it" : k === "roll" ? "rolls in" : "holds back") + "</button>").join("") +
+      "</div>";
+  }).join("") || '<p class="hint">No other pirates on the roster.</p>';
+  const n = Object.values(F.crew).filter(v => v === "roll" || v === "hold").length;
+  if (n && leader) $("crew").insertAdjacentHTML("beforeend",
+    '<p class="hint">' + esc(leader.name) + " holds " + brinks(leader) + " Brinksmanship dice, hands " + n +
+    " away, and rolls <b>" + ourDiceCount() + "</b> after withholding.</p>");
+}
+$("crew").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  const id = e.target.closest(".crewline").dataset.id, v = b.dataset.v;
+  const was = S.fight.crew[id];
+  S.fight.crew[id] = v;
+  if (v === "hold" && was !== "hold"){
+    const p = pc(id); if (p){ p.xs += 2;
+      logIt(p.name + " holds back — disobeys and doesn't fight. Marks 2 Xs (now " + p.xs + ").", ""); drawRoster(); }
+  }
+  save(); drawCrew(); drawFight(); drawSpend();
+});
+
+$("rollFight").addEventListener("click", () => {
+  const F = S.fight, us = pc(F.ourId); if (!us) return;
+  const on = ourDiceCount(), tn = theirDiceCount();
+  F.ours = rollN(on); F.theirs = rollN(tn);
+  F.level = 0; F.open = true;
+  F.wasTied = hits(F.ours) === hits(F.theirs);
+  F.lying = { ours: [], theirs: [] };
+  drawFight({ ours: { fresh: F.ours.map((_, i) => i) }, theirs: { fresh: F.theirs.map((_, i) => i) } });
+  logFight("the fight opens" + (F.withheld ? " (" + F.withheld + " withheld by bargain)" : ""));
+  save();
+});
+
+function doEscalate(side){
+  const F = S.fight;
+  if (!F.open) return toast("Roll the fight first.");
+  if (F.level >= MAX_LEVEL)
+    return toast("This fight has escalated twice. There is no further escalation — lose now and you lose all.");
+  // Record whether we were tied BEFORE escalating: advancing to a tie is a win, staying at a tie is a lose.
+  F.wasTied = hits(F.ours) === hits(F.theirs);
+  const key = side === "ours" ? "ours" : "theirs";
+  const before = F[key];
+  const [after, picked] = escalatePool(before);
+  const lying = before.map((d, i) => i).filter(i => !picked.includes(i));
+  F[key] = after; F.level++;
+  F.lying = { ours: [], theirs: [] }; F.lying[key] = lying;
+  const anim = { ours: {}, theirs: {} };
+  anim[key] = { picked, lying };
+  drawFight(anim);
+  logFight((side === "ours" ? pc(F.ourId)?.name || "our side" : F.theirName) +
+    " escalates to level " + (F.level + 1) + " — picked up " + picked.length +
+    " die/dice, left " + lying.length + " lying");
+  save();
+}
+$("escUs").addEventListener("click", () => doEscalate("ours"));
+$("escThem").addEventListener("click", () => doEscalate("theirs"));
+
+$("breakTie").addEventListener("click", () => {
+  const F = S.fight; if (!F.open) return toast("Roll the fight first.");
+  const [o, oi] = rerollLowest(F.ours), [t, ti] = rerollLowest(F.theirs);
+  F.ours = o; F.theirs = t;
+  drawFight({ ours: { picked: oi }, theirs: { picked: ti } });
+  logFight("both reroll their lowest die");
+  save();
+});
+
+$("gmCheck").addEventListener("click", async () => {
+  // The GM doesn't escalate at will: roll the NPC's Brinksmanship to one side,
+  // don't mix it in with the standing dice, and escalate only on 2+ (§4).
+  const n = await ask({ title: "GM escalation check",
+    body: "The opposing side's Brinksmanship — how many dice?\n\nThese roll aside and are never mixed in with the standing dice. The GM escalates only on 2 or more hits.",
+    number: true, value: 4, ok: "Roll aside" });
+  if (!n || n < 1) return;
+  const dice = rollN(n), h = hits(dice);
+  const go = h >= 2;
+  toast("Held aside: " + faces(dice) + " → " + h + " hits. " +
+        (go ? "The GM escalates." : "The GM does not escalate."));
+  logIt("GM escalation check (held aside, not mixed in)",
+    "  " + faces(dice) + "  → " + h + " hits → " + (go ? "ESCALATES" : "does not escalate"));
+});
+
+$("endFight").addEventListener("click", async () => {
+  const F = S.fight, us = pc(F.ourId); if (!us) return;
+  const oh = hits(F.ours), th = hits(F.theirs);
+  const won = oh > th, tied = oh === th;
+  const award = Math.max(0, oh - th);
+  let msg = "";
+  if (won) msg += us.name + " wins by " + award + " and marks " + award + " X" + (award === 1 ? "" : "s") +
+                  ".\nWinning means only the necessary harm of having fought.\n\n";
+  else if (tied) msg += (F.wasTied ? "Stayed at a tie — that is a lose." : "Advanced to a tie — that is a win.") +
+                  " No Xs are marked on a tie.\n\n";
+  else msg += us.name + " loses — suffering the full possible harm at level " + (F.level + 1) + ":\n" +
+              LADDERS[F.matchup].lv[F.level] + "\n\n";
+  msg += "After the fight, lose every unspent X. Only the winner carries any forward, and only those awarded for the win.\n\n" +
+         "This wipes every pirate on the roster, including any who sat this one out.";
+  if (!await ask({ title: "End the fight", body: msg, ok: "Wipe unspent Xs and clear the table" })) return;
+  S.pirates.forEach(p => { p.xs = 0; });
+  if (won) us.xs = award;
+  F.ours = []; F.theirs = []; F.level = 0; F.wasTied = false; F.open = false;
+  F.lying = { ours: [], theirs: [] }; F.crew = {};
+  logIt("The fight ends — " + (won ? us.name + " wins by " + award : tied ? "a tie" : us.name + " loses"),
+    "  unspent Xs lost" + (won ? "; " + us.name + " carries " + award + " forward" : ""));
+  drawRoster(); drawFight(); drawSpend(); drawCrew(); save();
+});
+
+function logFight(what){
+  const F = S.fight, us = pc(F.ourId);
+  logIt((us ? us.name : "us") + " vs " + F.theirName + " — " + what + " [" + F.matchup + "]",
+    "  " + (us ? us.name : "ours").padEnd(14) + faces(F.ours) + "  → " + hits(F.ours) + " hits\n" +
+    "  " + String(F.theirName).slice(0, 13).padEnd(14) + faces(F.theirs) + "  → " + hits(F.theirs) + " hits\n" +
+    "  level " + (F.level + 1) + " of 3 — " + statusText().plain);
+}
+
+function statusText(){
+  const F = S.fight, oh = hits(F.ours), th = hits(F.theirs);
+  if (!F.open) return { cls: "", html: "Set both sides and roll.", plain: "not yet rolled" };
+  if (oh === th){
+    if (F.level === 0)
+      return { cls: "tie", html: "<b>Tied.</b> Both reroll your lowest die — and keep going until you don't tie any more.",
+               plain: "TIED — both reroll lowest" };
+    return F.wasTied
+      ? { cls: "lose", html: "<b>Tied — you stayed at a tie.</b> That is a lose.", plain: "TIED, stayed — a lose" }
+      : { cls: "win",  html: "<b>Tied — you advanced to a tie.</b> That is a win. Winning on a tie means marking no Xs.",
+          plain: "TIED, advanced — a win" };
+  }
+  if (oh > th){
+    const n = oh - th;
+    return { cls: "win", html: "<b>Winning by " + n + ".</b> " + n + " X" + (n === 1 ? "" : "s") +
+      " if it ends now.<span class='note'>Winning means only the necessary harm of having fought.</span>",
+      plain: "WINNING by " + n };
+  }
+  const n = th - oh;
+  return { cls: "lose", html: "<b>Losing by " + n + ".</b> Escalate, spend Xs, or lose." +
+    (F.level >= MAX_LEVEL ? "<span class='note'>No escalation left. Lose now and you lose all.</span>" : ""),
+    plain: "LOSING by " + n };
+}
+
+function drawFight(anim){
+  anim = anim || {};
+  const F = S.fight, us = pc(F.ourId);
+  const on = ourDiceCount(), tn = theirDiceCount(), tp = theirProfileNow();
+
+  $("ourLabel").textContent = us ? us.name : "Ours";
+  $("theirLabel").textContent = F.theirName || "Theirs";
+  const standing = n => (F.open && F.ours.length + F.theirs.length ? " · " + n + " standing" : "");
+  $("ourCount").textContent = us
+    ? "Brinksmanship " + brinks(us) + (F.withheld ? " − " + F.withheld + " withheld" : "") +
+      (on !== brinks(us) - F.withheld ? " + crew" : "") + " → " + on + " dice" + standing(F.ours.length)
+    : "";
+  $("theirCount").textContent = (F.theirMode === "pc"
+    ? "Brinksmanship " + tn + " dice"
+    : "6 " + (tp - (us?.profile ?? 0) >= 0 ? "+ " : "− ") + Math.abs(tp - (us?.profile ?? 0)) +
+      " Profile difference → " + tn + " dice") + standing(F.theirs.length);
+
+  renderDice($("ourDice"), F.ours, Object.assign({ lying: F.lying.ours }, anim.ours));
+  renderDice($("theirDice"), F.theirs, Object.assign({ lying: F.lying.theirs }, anim.theirs));
+  $("ourHits").textContent = F.open ? hits(F.ours) : "—";
+  $("theirHits").textContent = F.open ? hits(F.theirs) : "—";
+
+  const st = statusText();
+  $("status").className = "status " + st.cls;
+  $("status").innerHTML = st.html;
+
+  $("escUs").disabled = $("escThem").disabled = !F.open || F.level >= MAX_LEVEL;
+  $("breakTie").disabled = !F.open;
+  const ringed = F.lying.ours.length + F.lying.theirs.length > 0;
+  $("levelNote").innerHTML = F.open
+    ? "Escalation <b>" + (F.level + 1) + " of 3</b>. " + (F.level >= MAX_LEVEL
+        ? "All fights begin at level 1, escalate to 2, then 3, and no further."
+        : "Escalating: " + esc(LADDERS[F.matchup].esc)) +
+      (ringed ? "<br><span style='color:var(--gold-l)'>⌐ ringed dice were left lying — they were not picked up on the last escalation.</span>" : "")
+    : "";
+
+  // profile difference warnings (§4)
+  const diff = Math.abs(tp - (us?.profile ?? 0));
+  let note = "";
+  if (us && diff >= 4){
+    note = '<div class="warn"><b>A difference of ' + diff + " Profile is not a fight, it's suicide.</b> The higher side " +
+      "may simply take the lower into their power, no dice rolled.</div>";
+  } else if (us && F.theirMode === "pc" && diff > 0){
+    const hi = (us.profile > tp) ? us : pc(F.theirPc);
+    note = '<div class="warn" style="background:rgba(184,145,63,.12);border-color:var(--gold);color:var(--gold-l)">' +
+      "PC vs PC: <b>" + esc(hi.name) + "</b> has the higher Profile and gets <b>" + diff + " extra X" +
+      (diff === 1 ? "" : "s") + '</b> before the dice. <button class="btn sm" id="awardX" style="margin-left:8px">Award them</button></div>';
+  }
+  $("setupNote").innerHTML = note;
+  const ax = $("awardX");
+  if (ax) ax.onclick = () => {
+    const hi = (us.profile > tp) ? us : pc(F.theirPc);
+    hi.xs += diff; logIt(hi.name + " takes " + diff + " X" + (diff === 1 ? "" : "s") + " for the higher Profile — now " + hi.xs, "");
+    drawRoster(); drawSpend(); drawFight(); save();
+  };
+
+  drawLadder();
+}
+
+function drawLadder(){
+  const F = S.fight, L = LADDERS[F.matchup];
+  $("ladder").innerHTML =
+    L.lv.map((t, i) =>
+      '<div class="lv ' + (F.open && i === F.level ? "cur" : (F.open && i < F.level ? "done" : "")) + '">' +
+      '<span class="n">Level ' + (i + 1) + "</span><span>" + esc(t) + "</span></div>").join("") +
+    (L.note ? '<div class="laddernote">' + esc(L.note) + "</div>" : "");
+}
+
+/* ================= SPENDING Xs (§4) ================= */
+const SPENDS = [
+  { cost: 3, when: "before", label: "Kill an NPC within reach, no fight. Say how. If they're part of a mob you're about to fight, it affects the GM's dice." },
+  { cost: null, when: "during", label: "Roll that many additional dice into your side — winning or losing.", dice: true },
+  { cost: 1, when: "during", label: "Ship-to-ship only, on a named member of the opposing crew (not its captain): out of the fight, unharmed. Their player's dice go out too. Doesn't affect the GM's dice." },
+  { cost: 2, when: "during", label: "…the same, but a disfiguring or disabling wound, not deadly." },
+  { cost: 3, when: "during", label: "…the same, but a deadly wound." },
+  { cost: 1, when: "during", label: "Winning at level 1: inflict level-1 harm even if they go on to win. They may spend 1 X to undo it. Not in gun-to-gun or pursuit." },
+  { cost: 2, when: "during", label: "Winning at level 2: inflict level-2 harm even if they go on to win. They may spend 2 Xs to undo it." },
+  { cost: 2, when: "end", label: "LOST: reduce the harm you suffer by one level of escalation. Once only — 4 Xs will not buy two levels." },
+  { cost: 1, when: "end", label: "LOST: inflict level-1 harm anyway. They may spend 1 X now to undo it." },
+  { cost: 2, when: "end", label: "LOST: inflict level-2 harm anyway. They may spend 2 Xs now to undo it." },
+  { cost: 1, when: "end", label: "LOST, in a mob, and not the captain: suffer no harm, whatever your side suffers." },
+  { cost: 2, when: "end", label: "WON: reduce the harm you inflict by one level. Once only, and not at all if the loser already reduced it." }
+];
+function drawSpend(){
+  const p = pc(S.fight.ourId) || pc(S.selected);
+  $("spenderName").textContent = p ? p.name + " — " + p.xs + " X" + (p.xs === 1 ? "" : "s") : "—";
+  const groups = { before: "Before the fight", during: "During the fight", end: "At the end of the fight" };
+  let html = "";
+  ["before","during","end"].forEach(g => {
+    html += '<h3 class="sec" style="margin:10px 0 4px">' + groups[g] + "</h3>";
+    html += SPENDS.filter(s => s.when === g).map((s, i) => {
+      const idx = SPENDS.indexOf(s);
+      const affordable = p && (s.dice ? p.xs > 0 : p.xs >= s.cost);
+      return '<button class="sp" data-i="' + idx + '"' + (affordable ? "" : " disabled") + ">" +
+        '<span class="cost">' + (s.dice ? "N" : s.cost) + "<small>X" + (s.cost === 1 ? "" : "s") + "</small></span>" +
+        "<span>" + esc(s.label) + "</span></button>";
+    }).join("");
+  });
+  $("spend").innerHTML = html;
+}
+$("spend").addEventListener("click", async e => {
+  const b = e.target.closest(".sp"); if (!b || b.disabled) return;
+  const s = SPENDS[+b.dataset.i], p = pc(S.fight.ourId) || pc(S.selected); if (!p) return;
+  let n = s.cost;
+  if (s.dice){
+    n = await ask({ title: "Roll extra dice into " + p.name + "'s side",
+      body: p.xs + " X" + (p.xs === 1 ? "" : "s") + " available. Each X buys one die, rolled in beside the dice already standing.",
+      number: true, value: 1, ok: "Spend and roll" });
+    if (!n || n < 1) return;
+    if (n > p.xs) return toast(p.name + " has only " + p.xs + " X" + (p.xs === 1 ? "" : "s") + ".");
+    if (!S.fight.open) return toast("Roll the fight first.");
+    const before = S.fight.ours.length;
+    S.fight.ours = S.fight.ours.concat(rollN(n));   // standing dice keep their faces
+    p.xs -= n;
+    drawFight({ ours: { fresh: S.fight.ours.map((_, i) => i).filter(i => i >= before), lying: [] } });
+    logFight(p.name + " spends " + n + " X" + (n === 1 ? "" : "s") + " for " + n + " more dice");
+  } else {
+    if (p.xs < n) return;
+    p.xs -= n;
+    logIt(p.name + " spends " + n + " X" + (n === 1 ? "" : "s") + " — now " + p.xs, "  " + s.label);
+  }
+  drawRoster(); drawSpend(); save();
+});
+
+/* ================= SUNDRIES ================= */
+$("rollPlunder").addEventListener("click", () => {
+  const n = Math.min(6, Math.max(2, Number($("prizeN").value) || 2));
+  const dice = rollN(n), total = pips(dice);          // sum the pips, don't count hits (§8)
+  renderDice($("plunderDice"), dice, { fresh: dice.map((_, i) => i) });
+  $("plunderOut").textContent = total;
+  logIt("Plunder from a prize of " + n,
+    "  " + dice.join(" ") + "  → " + total + " (pips summed, not hits)\n" +
+    "  3 removes malcontentment, want or wear & breakage · 2+ gives Leisure 1 for 1 · 1 gives the captain an X · save the rest");
+});
+
+$("rollUrgency").addEventListener("click", () => {
+  const d = d6();
+  const hit = S.urgency.includes(d);
+  if (!hit) S.urgency = [...S.urgency, d].sort();
+  $("urgMarks").textContent = S.urgency.join(" ") || "—";
+  $("urgNote").innerHTML = hit
+    ? "<b style='color:var(--rust-l)'>Rolled " + d + " — a match. The urgency is fulfilled: its consequent fortune enters play at once.</b>"
+    : "Rolled " + d + " — no match. Add it to the card and carry on.";
+  logIt("Urgency rolls " + d + (hit ? " — MATCH, the urgency is fulfilled" : " — no match, marked on the card"),
+    "  card now: " + (S.urgency.join(" ") || "empty"));
+  save();
+});
+$("clearUrg").addEventListener("click", () => {
+  S.urgency = []; $("urgMarks").textContent = "—";
+  $("urgNote").textContent = "Card cleared."; save();
+});
+
+$("rollNpc").addEventListener("click", () => {
+  const a = d6(), b = d6();
+  $("quickOut").innerHTML = "NPC Brinksmanship: <b>" + a + "</b> and <b>" + b + "</b> → take the higher, <b>" +
+    Math.max(a, b) + "</b>. <span style='color:#7f7460;font-style:italic'>(A private person: whichever seems better.)</span>";
+  logIt("NPC Brinksmanship: " + a + " " + b + " → " + Math.max(a, b), "");
+});
+$("rollStorm").addEventListener("click", () => {
+  const d = d6();
+  $("quickOut").innerHTML = "The storm: 1d6 + 8 = <b>" + (d + 8) + "</b> Profile. " +
+    "<span style='color:#7f7460;font-style:italic'>It escalates every time and never rolls Brinksmanship.</span>";
+  logIt("The storm's Profile: " + d + " + 8 = " + (d + 8), "");
+});
+$("rollDisease").addEventListener("click", () => {
+  const a = d6(), b = d6();
+  $("quickOut").innerHTML = "Disease Brinksmanship: higher of " + a + " and " + b + " → <b>" + Math.max(a, b) + "</b>. " +
+    "<span style='color:#7f7460;font-style:italic'>+1 Profile over the crew's if any of debauchery / madness / want is in play; +2 if two or three are.</span>";
+  logIt("Disease Brinksmanship: " + a + " " + b + " → " + Math.max(a, b), "");
+});
+
+/* ================= LOG TOOLS ================= */
+$("copyLast").addEventListener("click", () => {
+  if (!S.log.length) return toast("Nothing rolled yet.");
+  copy("```\n" + plain(S.log[0]) + "\n```", "The last roll");
+});
+$("copyAll").addEventListener("click", () => {
+  if (!S.log.length) return toast("Nothing rolled yet.");
+  copy("```\n" + S.log.slice().reverse().map(e => e.t + "  " + plain(e)).join("\n") + "\n```", "The log");
+});
+$("clearLog").addEventListener("click", () => { S.log = []; drawLog(); save(); });
+
+/* ================= ROSTER TOOLS ================= */
+$("addPc").addEventListener("click", () => {
+  S.pirates.push(blank("A new pirate")); save(); drawRoster(); refreshPickers(); drawCrew();
+});
+$("shareRoster").addEventListener("click", () => {
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(
+    S.pirates.map(({name, soul, devil, brutality, ambition, profile}) =>
+      ({name, soul, devil, brutality, ambition, profile}))))));
+  copy(code, "The roster code");
+});
+$("loadRoster").addEventListener("click", async () => {
+  const code = await ask({ title: "Load a roster",
+    body: "Paste the roster code someone shared. This replaces the pirates on this screen and sets every X pool to zero.",
+    text: true, ok: "Load it" });
+  if (!code) return;
+  try {
+    const list = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+    if (!Array.isArray(list) || !list.length) throw 0;
+    S.pirates = list.map(p => Object.assign(blank(p.name || "?"), p, { xs: 0 }));
+    S.selected = S.pirates[0].id; S.fight.ourId = S.selected; S.fight.crew = {};
+    save(); boot(); toast("Roster loaded — " + S.pirates.length + " pirates.");
+  } catch(e){ toast("That code didn't parse. Copy the whole thing."); }
+});
+$("resetAll").addEventListener("click", async () => {
+  if (!await ask({ title: "Reset everything",
+    body: "This wipes the roster, every X pool, the fight on the table and the log, and starts clean.",
+    ok: "Wipe it all" })) return;
+  try { localStorage.removeItem(KEY); } catch(e){}
+  location.reload();
+});
+
+/* ================= BOOT ================= */
+function boot(){
+  drawRoster();
+  refreshPickers();
+  $("theirName").value = S.fight.theirName;
+  $("theirMode").value = S.fight.theirMode;
+  $("theirProfile").value = S.fight.theirProfile;
+  $("matchup").value = S.fight.matchup;
+  $("withheld").value = S.fight.withheld;
+  $("situation").value = S.sr.situation;
+  $("urgMarks").textContent = S.urgency.join(" ") || "—";
+  $("wrapTheirPc").style.display = S.fight.theirMode === "pc" ? "" : "none";
+  $("wrapTheirProfile").style.display = S.fight.theirMode === "pc" ? "none" : "";
+  drawDiscards(); drawSuccessPair(); drawFight(); drawSpend(); drawCrew(); drawLog();
+}
+load();
+boot();
+
+/* ---- keyboard: the three things you press most ---- */
+document.addEventListener("keydown", e => {
+  if (!$("modal").hidden) return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  if (e.key === "r" || e.key === "R") $("rollFight").click();
+  if (e.key === "e" || e.key === "E") $("escUs").click();
+  if (e.key === "t" || e.key === "T") $("breakTie").click();
+  if (e.key === "s" || e.key === "S") $("rollSuccess").click();
+});
+</script>
+</body>
+</html>
