@@ -302,6 +302,27 @@
   }
   .sheet #mText:focus{outline:none;border-color:var(--gold)}
   .mbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  /* ---------- sync bar ---------- */
+  .sync{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:4px;padding:9px 14px;margin-bottom:14px;
+    background:rgba(0,0,0,.22);font-size:12.5px;color:#8d8267;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.on{background:#6ea55f;box-shadow:0 0 8px rgba(110,165,95,.7)}
+  .dot.warn{background:var(--gold)}
+  .dot.off{background:var(--rust-l)}
+  .sync .code{
+    font-family:"Consolas","SF Mono",Menlo,monospace;font-size:15px;letter-spacing:.18em;
+    color:var(--parch-e);font-weight:600;
+  }
+  .sync .who{color:var(--gold-l)}
+  .sync .grow{flex:1}
+  .flash{animation:flash .5s ease-out}
+  @keyframes flash{0%{background:rgba(110,165,95,.28)}100%{background:rgba(0,0,0,.22)}}
+  @media(prefers-reduced-motion:reduce){
+    .die.picked,.die.fresh,.flash{animation:none}
+  }
   .toast{
     position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:99;
     background:#241c17;border:1px solid var(--gold);color:var(--parch-e);
@@ -322,6 +343,18 @@
   <p class="sub" style="margin-top:6px;color:#6f6551">Every browser that opens this gets its own table — nothing is
     shared between you. Run it on one screen share, or roll your own and read it out.</p>
 </header>
+
+<!-- ============ SYNC ============ -->
+<div class="sync" id="sync">
+  <span class="dot" id="syncDot"></span>
+  <span id="syncText">Solo — this table is yours alone.</span>
+  <span class="grow"></span>
+  <span id="syncCode"></span>
+  <button class="btn sm" id="startShare">Start a shared table</button>
+  <button class="btn sm" id="joinShare">Join with a code</button>
+  <button class="btn sm" id="copyLink" style="display:none">Copy the link for Discord</button>
+  <button class="btn sm" id="leaveShare" style="display:none">Leave</button>
+</div>
 
 <!-- ============ ROSTER ============ -->
 <div class="roster" id="roster"></div>
@@ -522,6 +555,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="mqtt.min.js"></script>
 <script>
 "use strict";
 /* ------------------------------------------------------------------
@@ -635,10 +669,14 @@ let S = {
            ours: [], theirs: [], level: 0, wasTied: false, open: false,
            lying: { ours: [], theirs: [] }, crew: {} },
   sr: { situation: 0, you: [], gm: [], adv: 0, pending: false },
-  log: []
+  log: [],
+  rev: 0                      // monotonic; decides whose state wins when two people act at once
 };
 
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+  if (!net.applying) schedulePublish();     // share the change with the rest of the table
+}
 function load(){
   try {
     const raw = localStorage.getItem(KEY);
@@ -1281,6 +1319,271 @@ $("resetAll").addEventListener("click", async () => {
   location.reload();
 });
 
+/* ================= SHARED TABLE =================
+   Everyone in a room holds the whole state and publishes it whole when they change it.
+   The transport is MQTT over websockets against public brokers — no account for anyone,
+   and a RETAINED message means a player who opens the link mid-fight is handed the
+   current table immediately instead of an empty one.
+
+   Conflicts are last-writer-wins on a monotonic `rev`. That is the right trade here:
+   five people on voice rarely act in the same 200ms, and the alternative (operational
+   transforms over a dice pool) costs far more than it returns.
+
+   If the library is missing or every broker refuses, the app stays exactly as it was —
+   a solo table. Sync is an enhancement, never a dependency. */
+
+const BROKERS = [
+  "wss://broker.hivemq.com:8884/mqtt",
+  "wss://test.mosquitto.org:8081/mqtt",
+  "wss://broker.emqx.io:8084/mqtt"
+];
+const NS = "poisond/v1";
+const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no I/O/0/1 to misread aloud
+
+const ME = (() => {
+  try {
+    let v = localStorage.getItem("poisond-client");
+    if (!v){ v = Math.random().toString(36).slice(2, 10); localStorage.setItem("poisond-client", v); }
+    return v;
+  } catch(e){ return Math.random().toString(36).slice(2, 10); }
+})();
+
+/* Connect to EVERY broker at once rather than failing over between them. Failover
+   splits the table: if the GM's browser lands on one broker and a player's lands on
+   another, both look connected and neither ever sees the other. Multi-homing costs
+   three small websockets and removes that failure mode entirely — a duplicate of the
+   same message is free, because `rev` discards anything we have already applied. */
+let net = { conns: [], room: null, applying: false,
+            primed: false, peers: {}, pubT: null, beat: null, prune: null, repair: null };
+const anyUp = () => net.conns.some(c => c.up);
+
+const tState = () => NS + "/" + net.room + "/state";
+const tWho   = id => NS + "/" + net.room + "/who/" + id;
+
+function newRoom(){
+  let s = "";
+  for (let i = 0; i < 5; i++) s += ROOM_ALPHABET[Math.floor(Math.random() * ROOM_ALPHABET.length)];
+  return s;
+}
+function roomFromUrl(){
+  const m = (location.hash || "").match(/r=([A-Za-z0-9]{4,12})/);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** Everything except `selected` — which pirate THIS browser is acting as stays local,
+ *  so two players can each have their own sheet in focus. */
+function syncable(){
+  const out = {};
+  for (const k in S) if (k !== "selected") out[k] = S[k];
+  out.log = S.log.slice(0, 50);
+  return out;
+}
+
+function pubAll(topic, payload, opts){
+  net.conns.forEach(c => { if (c.up){ try { c.client.publish(topic, payload, opts); } catch(e){} } });
+}
+function schedulePublish(){
+  if (!anyUp()) return;
+  clearTimeout(net.pubT);
+  net.pubT = setTimeout(publishNow, 160);
+}
+/** `rev` is a wall-clock stamp, not a counter. Counters are per-client and can't be
+ *  compared across a table; worse, a retained message from a previous session could
+ *  carry a high counter and outrank live play. A timestamp orders correctly between
+ *  clients and makes anything left over from last week lose automatically. */
+function bumpRev(){ S.rev = Math.max(Date.now(), (S.rev || 0) + 1); }
+
+function publishNow(){
+  if (!anyUp()) return;
+  bumpRev();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+  republish();
+}
+
+/** Push the state we already have, WITHOUT bumping rev. Brokers drop retained messages
+ *  and links come up late, so each broker is re-seeded on connect and on a slow timer.
+ *  Re-sending the same rev is inert for peers — they ignore anything not newer — but it
+ *  repairs a broker holding nothing or holding something stale. */
+function republish(){
+  if (!anyUp() || !net.room) return;
+  pubAll(tState(), JSON.stringify({ rev: S.rev, by: ME, s: syncable() }), { retain: true, qos: 0 });
+}
+function republishTo(st){
+  if (!st.up || !net.room) return;
+  try {
+    st.client.publish(tState(), JSON.stringify({ rev: S.rev, by: ME, s: syncable() }),
+      { retain: true, qos: 0 });
+  } catch(e){}
+}
+
+function applyRemote(raw){
+  let m;
+  try { m = JSON.parse(raw); } catch(e){ return; }
+  if (!m || !m.s || m.by === ME) return;
+  net.primed = true;                       // this table exists; we are not the one seeding it
+  if ((m.rev || 0) <= (S.rev || 0)) return;
+
+  net.applying = true;
+  const keep = S.selected;
+  for (const k in m.s) S[k] = m.s[k];
+  S.rev = m.rev || 0;
+  S.selected = S.pirates.some(p => p.id === keep) ? keep : (S.pirates[0] || {}).id || null;
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+  boot();
+  net.applying = false;
+
+  const bar = $("sync");
+  bar.classList.remove("flash"); void bar.offsetWidth; bar.classList.add("flash");
+}
+
+function peerCount(){
+  const cut = Date.now() - 70000;
+  return 1 + Object.keys(net.peers).filter(id => id !== ME && net.peers[id] > cut).length;
+}
+function drawSync(){
+  const dot = $("syncDot"), txt = $("syncText"), code = $("syncCode");
+  const inRoom = !!net.room;
+  $("startShare").style.display = inRoom ? "none" : "";
+  $("joinShare").style.display  = inRoom ? "none" : "";
+  $("copyLink").style.display   = inRoom ? "" : "none";
+  $("leaveShare").style.display = inRoom ? "" : "none";
+  code.innerHTML = inRoom ? 'table <span class="code">' + esc(net.room) + "</span>" : "";
+
+  if (!inRoom){
+    dot.className = "dot";
+    txt.textContent = window.mqtt
+      ? "Solo — this table is yours alone."
+      : "Solo — sharing is unavailable (the sync library didn't load).";
+    return;
+  }
+  if (anyUp()){
+    const n = peerCount(), links = net.conns.filter(c => c.up).length;
+    dot.className = "dot on";
+    txt.innerHTML = "Shared — <span class='who'>" + n + " aboard</span>. Everyone here sees the same " +
+      "dice and the same Xs. <span style='color:#5f5747'>(" + links + " of " + BROKERS.length + " links up)</span>";
+  } else {
+    dot.className = "dot warn";
+    txt.textContent = "Shared table " + net.room + " — reaching the others…";
+  }
+}
+
+function joinRoom(room){
+  if (!window.mqtt){ toast("Sharing is unavailable — the sync library didn't load."); return; }
+  leaveRoom(false);
+  net.room = room.toUpperCase();
+  net.primed = false;
+  if (roomFromUrl() !== net.room) location.hash = "r=" + net.room;
+  drawSync();
+  net.conns = BROKERS.map(openConn);
+  net.beat = setInterval(beat, 20000);
+  net.prune = setInterval(drawSync, 10000);
+  net.repair = setInterval(republish, 15000);   // heals any broker that dropped the state
+  // Nothing retained on any broker? Then this table is new and ours seeds it.
+  setTimeout(() => { if (!net.primed && anyUp()) publishNow(); }, 2500);
+}
+
+function onMessage(topic, payload){
+  const s = payload.toString();
+  if (/\/state$/.test(topic)) return applyRemote(s);
+  const m = topic.match(/\/who\/([^/]+)$/);
+  if (m){
+    if (!s) delete net.peers[m[1]];
+    else net.peers[m[1]] = Date.now();
+    drawSync();
+  }
+}
+
+/** One broker link, retrying on its own. Any one of them being up is enough. */
+function openConn(url){
+  const st = { url, client: null, up: false, tries: 0 };
+
+  const retry = () => {
+    if (!net.room || st.tries > 6) return;
+    st.tries++;
+    setTimeout(open, Math.min(20000, 1200 * st.tries));
+  };
+
+  const open = () => {
+    if (!net.room) return;
+    let c;
+    try {
+      c = mqtt.connect(url, {
+        clientId: "pd-" + ME + "-" + Math.random().toString(16).slice(2, 6),
+        connectTimeout: 7000,
+        reconnectPeriod: 0,
+        clean: true,
+        will: { topic: tWho(ME), payload: "", retain: true, qos: 0 }  // clears presence if we drop
+      });
+    } catch(e){ return retry(); }
+    st.client = c;
+
+    const timer = setTimeout(() => { if (!st.up){ try { c.end(true); } catch(e){} retry(); } }, 8000);
+
+    c.on("connect", () => {
+      clearTimeout(timer);
+      st.up = true; st.tries = 0;
+      c.subscribe([tState(), NS + "/" + net.room + "/who/+"], { qos: 0 }, () => {});
+      beat();
+      drawSync();
+      // Seed this link. The wait lets any retained state arrive first, so we push the
+      // table as it really stands rather than overwriting it with what we had.
+      setTimeout(() => republishTo(st), 1800);
+    });
+    c.on("message", onMessage);
+    c.on("error", () => {});                 // 'close' always follows; retry from there
+    c.on("close", () => {
+      clearTimeout(timer);
+      if (st.up){ st.up = false; drawSync(); }
+      retry();
+    });
+  };
+
+  open();
+  return st;
+}
+
+function beat(){
+  if (!anyUp()) return;
+  pubAll(tWho(ME), JSON.stringify({ t: Date.now() }), { retain: true, qos: 0 });
+  net.peers[ME] = Date.now();
+}
+
+function leaveRoom(clearHash){
+  clearInterval(net.beat); clearInterval(net.prune); clearInterval(net.repair); clearTimeout(net.pubT);
+  pubAll(tWho(ME), "", { retain: true, qos: 0 });
+  net.conns.forEach(c => { try { c.client && c.client.end(true); } catch(e){} });
+  net.conns = []; net.room = null; net.peers = {}; net.primed = false;
+  if (clearHash !== false && location.hash) history.replaceState(null, "", location.pathname + location.search);
+  drawSync();
+}
+
+$("startShare").addEventListener("click", () => {
+  joinRoom(newRoom());
+  toast("Shared table opened. Send the others the link and they'll see these dice.");
+});
+$("joinShare").addEventListener("click", async () => {
+  const code = await ask({ title: "Join a shared table",
+    body: "Type the table code someone read out, or just open the link they sent. Joining replaces what's on your screen with theirs.",
+    text: true, ok: "Join" });
+  if (code) joinRoom(code.replace(/[^A-Za-z0-9]/g, "").slice(0, 12));
+});
+$("copyLink").addEventListener("click", () => {
+  copy(location.origin + location.pathname + "#r=" + net.room, "The table link");
+});
+$("leaveShare").addEventListener("click", async () => {
+  if (!await ask({ title: "Leave the shared table",
+    body: "You keep the table as it stands now, but you stop seeing everyone else's rolls and they stop seeing yours.",
+    ok: "Leave" })) return;
+  leaveRoom(true);
+});
+window.addEventListener("beforeunload", () => {
+  if (net.room) pubAll(tWho(ME), "", { retain: true, qos: 0 });
+});
+window.addEventListener("hashchange", () => {
+  const r = roomFromUrl();
+  if (r && r !== net.room) joinRoom(r);
+});
+
 /* ================= BOOT ================= */
 function boot(){
   drawRoster();
@@ -1295,9 +1598,17 @@ function boot(){
   $("wrapTheirPc").style.display = S.fight.theirMode === "pc" ? "" : "none";
   $("wrapTheirProfile").style.display = S.fight.theirMode === "pc" ? "none" : "";
   drawDiscards(); drawSuccessPair(); drawFight(); drawSpend(); drawCrew(); drawLog();
+  drawSync();
 }
 load();
 boot();
+
+// Opened from a shared link? Join that table. Kept out of boot() — boot() re-runs on
+// every remote update, and rejoining on each one would loop.
+(function autoJoin(){
+  const r = roomFromUrl();
+  if (r && window.mqtt) joinRoom(r);
+})();
 
 /* ---- keyboard: the three things you press most ---- */
 document.addEventListener("keydown", e => {
