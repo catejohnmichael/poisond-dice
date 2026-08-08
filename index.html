@@ -495,8 +495,9 @@
 
       <h3 class="sec">What the GM throws away</h3>
       <div class="chips" id="discardChips"></div>
-      <p class="hint">The book contradicts itself: the rule says a <i>scoring</i> die, the p.12 example throws away
-        <i>a die</i>. Pick your table's ruling once. <b>Abandoned to fate</b> suspends the discard entirely.</p>
+      <p class="hint">The GM throws away their first 4, 5 or 6 — p.20 says so outright, and the played examples on
+        p.15 do it, where <b>2 3 6</b> loses the 6 and counts for nothing. The two quick examples on p.12 skip the
+        discard; treat those as the slip. Switch to <b>Nothing</b> only while <b>abandoned to fate</b> is in play.</p>
     </div>
 
     <div class="panel">
@@ -686,6 +687,9 @@ function load(){
     if (raw) { const p = JSON.parse(raw); S = Object.assign(S, p);
       S.fight = Object.assign({ lying:{ours:[],theirs:[]}, crew:{} }, S.fight); }
   } catch(e){}
+  // The "any one die" reading was withdrawn: p.15 rules it out (2 3 6 loses the 6, not the 2).
+  // Anyone whose browser saved it comes back to the reading the rules actually support.
+  if (S.discard === "die") S.discard = "hit";
   if (!S.selected || !S.pirates.some(p => p.id === S.selected)) S.selected = S.pirates[0]?.id || null;
   if (!S.fight.ourId || !S.pirates.some(p => p.id === S.fight.ourId)) S.fight.ourId = S.selected;
 }
@@ -845,9 +849,8 @@ $("situation").innerHTML = SITUATIONS.map((s, i) =>
 $("situation").addEventListener("change", () => { S.sr.situation = +$("situation").value; drawSuccessPair(); save(); });
 
 const DISCARDS = [
-  ["hit",  "A scoring die",  "The rule text. The GM's hit count drops by one."],
-  ["die",  "Any one die",    "The p.12 example — 3 3 6 counts for 1. Only bites when every GM die is a hit."],
-  ["none", "Nothing",        "Abandoned to fate is in play. The devil no longer looks after his own."]
+  ["hit",  "A scoring die", "Normal play: the GM's first 4, 5 or 6 goes, because the devil looks after his own."],
+  ["none", "Nothing",       "Abandoned to fate is in play. The devil no longer looks after his own."]
 ];
 function drawDiscards(){
   $("discardChips").innerHTML = DISCARDS.map(([v, l, t]) =>
@@ -861,11 +864,13 @@ $("discardChips").addEventListener("click", e => {
   toast("GM discard: " + d[1] + ". " + d[2]);
 });
 
-/** The GM's count after 'I throw one away first'. OPEN TABLE RULING — see DECISIONS.md. */
+/** The GM's count after 'I throw one away first' (§3).
+ *  What goes is a SCORING die: p.20 names it outright — "your first 4, 5, or 6" — and the
+ *  played examples on p.15 do exactly that, where 2 3 6 loses the 6 and counts for nothing.
+ *  The only variation is abandoned to fate, which suspends the discard (§10). */
 function gmCount(dice){
   const h = hits(dice);
   if (S.discard === "none") return h;
-  if (S.discard === "die")  return (dice.length && dice.every(d => d >= 4)) ? h - 1 : h;
   return Math.max(0, h - 1);
 }
 
@@ -890,8 +895,7 @@ $("rollSuccess").addEventListener("click", () => {
   $("srYouHits").textContent = yh;
   $("srGmHits").textContent = gc;
   $("srGmNote").textContent = hits(gm) + " hits, " +
-    (S.discard === "none" ? "nothing thrown away (abandoned to fate)" :
-     S.discard === "die" ? "one die thrown away" : "one scoring die thrown away");
+    (S.discard === "none" ? "nothing thrown away (abandoned to fate)" : "one scoring die thrown away");
 
   const st = $("srStatus");
   if (S.sr.adv > 0){
