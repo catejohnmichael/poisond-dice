@@ -493,11 +493,8 @@
       <div class="status" id="srStatus">The GM throws one away first — the devil looks after his own.</div>
       <button class="btn primary" id="srMark" style="display:none;margin-top:8px">Mark the Xs</button>
 
-      <h3 class="sec">What the GM throws away</h3>
+      <h3 class="sec">GM discards</h3>
       <div class="chips" id="discardChips"></div>
-      <p class="hint">The GM throws away their first 4, 5 or 6 — p.20 says so outright, and the played examples on
-        p.15 do it, where <b>2 3 6</b> loses the 6 and counts for nothing. The two quick examples on p.12 skip the
-        discard; treat those as the slip. Switch to <b>Nothing</b> only while <b>abandoned to fate</b> is in play.</p>
     </div>
 
     <div class="panel">
@@ -849,8 +846,8 @@ $("situation").innerHTML = SITUATIONS.map((s, i) =>
 $("situation").addEventListener("change", () => { S.sr.situation = +$("situation").value; drawSuccessPair(); save(); });
 
 const DISCARDS = [
-  ["hit",  "A scoring die", "Normal play: the GM's first 4, 5 or 6 goes, because the devil looks after his own."],
-  ["none", "Nothing",       "Abandoned to fate is in play. The devil no longer looks after his own."]
+  ["hit",  "Scoring Die",       "Normal play — the GM's first 4, 5 or 6 goes."],
+  ["none", "Abandoned to Fate", "No discard — the devil no longer looks after his own."]
 ];
 function drawDiscards(){
   $("discardChips").innerHTML = DISCARDS.map(([v, l, t]) =>
@@ -860,8 +857,7 @@ function drawDiscards(){
 $("discardChips").addEventListener("click", e => {
   const b = e.target.closest(".chip"); if (!b) return;
   S.discard = b.dataset.v; drawDiscards(); save();
-  const d = DISCARDS.find(x => x[0] === S.discard);
-  toast("GM discard: " + d[1] + ". " + d[2]);
+  toast(DISCARDS.find(x => x[0] === S.discard)[2]);
 });
 
 /** The GM's count after 'I throw one away first' (§3).
@@ -894,7 +890,7 @@ $("rollSuccess").addEventListener("click", () => {
   renderDice($("srGmDice"), gm, { fresh: gm.map((_, i) => i) });
   $("srYouHits").textContent = yh;
   $("srGmHits").textContent = gc;
-  $("srGmNote").textContent = hits(gm) + " hits, " +
+  $("srGmNote").textContent = hits(gm) + (hits(gm) === 1 ? " hit, " : " hits, ") +
     (S.discard === "none" ? "nothing thrown away (abandoned to fate)" : "one scoring die thrown away");
 
   const st = $("srStatus");
